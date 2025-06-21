@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  sqlite-mcp-server:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./init:/app/init
+    environment:
+      - DATABASE_PATH=/app/data/sqlite.db
+      - LOG_LEVEL=INFO
+      - INIT_SCRIPT=/app/init/init.sql
+    stdin_open: true
+    tty: true
+    restart: unless-stopped 
