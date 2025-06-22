@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 创建必要的目录
-RUN mkdir -p /app/data /app/config /app/init
+RUN mkdir -p /app/data /app/config /app/init /app/scripts
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1
@@ -29,6 +29,13 @@ RUN echo '#!/bin/bash\n\
 echo "🚀 启动SQLite MCP服务器..."\n\
 echo "📁 初始化数据库..."\n\
 python -c "from database.connection import db_manager; print(\"✅ 数据库初始化完成\")"\n\
+echo "⏰ 初始化时段库存..."\n\
+python scripts/init_time_slots.py\n\
+if [ $? -eq 0 ]; then\n\
+    echo "✅ 时段库存初始化完成"\n\
+else\n\
+    echo "⚠️  时段库存初始化失败，但继续启动服务器"\n\
+fi\n\
 echo "🌐 启动MCP服务器 (stdio模式)..."\n\
 exec python main.py' > /app/start.sh && chmod +x /app/start.sh
 

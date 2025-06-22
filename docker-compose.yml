@@ -7,10 +7,16 @@ services:
       - ./data:/app/data
       - ./config:/app/config
       - ./init:/app/init
+      - ./scripts:/app/scripts
     environment:
       - DATABASE_PATH=/app/data/sqlite.db
       - LOG_LEVEL=INFO
       - INIT_SCRIPT=/app/init/init.sql
+      # 时段库存初始化配置
+      - INIT_DAYS=7
+      - RESTAURANT_OPEN_TIME=09:00
+      - RESTAURANT_CLOSE_TIME=21:00
+      - SLOT_HOURS=2
     stdin_open: true
     tty: true
-    restart: unless-stopped 
+    restart: unless-stopped
