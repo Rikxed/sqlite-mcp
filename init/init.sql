@@ -11,14 +11,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 餐厅基本信息表
-CREATE TABLE restaurants (
+CREATE TABLE IF NOT EXISTS restaurants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 餐桌类型表
-CREATE TABLE table_types (
+CREATE TABLE IF NOT EXISTS table_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     restaurant_id INTEGER NOT NULL,
     capacity INTEGER NOT NULL CHECK(capacity > 0),  -- 桌型容量
@@ -27,7 +27,7 @@ CREATE TABLE table_types (
 );
 
 -- 时间段库存表（核心）
-CREATE TABLE time_slots (
+CREATE TABLE IF NOT EXISTS time_slots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     restaurant_id INTEGER NOT NULL,
     table_type_id INTEGER NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE time_slots (
 );
 
 -- 预订记录表（添加了email字段）
-CREATE TABLE reservations (
+CREATE TABLE IF NOT EXISTS reservations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     restaurant_id INTEGER NOT NULL,
     table_type_id INTEGER NOT NULL,
@@ -55,22 +55,22 @@ CREATE TABLE reservations (
 );
 
 -- 创建索引优化查询性能
-CREATE INDEX idx_restaurants_name ON restaurants(name);
-CREATE INDEX idx_table_types_rest ON table_types(restaurant_id);
-CREATE INDEX idx_time_slots_main ON time_slots(restaurant_id, slot_start);
-CREATE INDEX idx_reservations_main ON reservations(restaurant_id, slot_start);
-CREATE INDEX idx_reservations_email ON reservations(email); -- 邮箱索引
+CREATE INDEX IF NOT EXISTS idx_restaurants_name ON restaurants(name);
+CREATE INDEX IF NOT EXISTS idx_table_types_rest ON table_types(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_time_slots_main ON time_slots(restaurant_id, slot_start);
+CREATE INDEX IF NOT EXISTS idx_reservations_main ON reservations(restaurant_id, slot_start);
+CREATE INDEX IF NOT EXISTS idx_reservations_email ON reservations(email); -- 邮箱索引
 
 
 ---------创建初始化餐厅数据------
 
 -- 步骤1: 插入餐厅基本信息
-INSERT INTO restaurants (name) VALUES 
+INSERT OR IGNORE INTO restaurants (name) VALUES 
 ('广式早茶'),
 ('川菜馆');
 
 -- 步骤2: 插入桌型配置（使用子查询获取餐厅ID）
-INSERT INTO table_types (restaurant_id, capacity, quantity)
+INSERT OR IGNORE INTO table_types (restaurant_id, capacity, quantity)
 -- 广式早茶桌型
 SELECT id, 6, 5 FROM restaurants WHERE name = '广式早茶'
 UNION ALL
@@ -127,7 +127,7 @@ all_slots AS (
   FROM date_series d, time_slots t
 )
 -- 插入库存数据
-INSERT INTO time_slots (restaurant_id, table_type_id, slot_start, slot_end, available)
+INSERT OR IGNORE INTO time_slots (restaurant_id, table_type_id, slot_start, slot_end, available)
 SELECT 
   tt.restaurant_id,
   tt.id AS table_type_id,
