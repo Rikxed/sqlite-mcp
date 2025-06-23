@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """应用配置类"""
     
     # 数据库配置
-    database_path: str = os.getenv("DATABASE_PATH", "data/sqlite.db")
+    database_path: str = os.getenv("DATABASE_PATH", "data/restaurants.db")
     
     # 初始化配置
     init_script: Optional[str] = os.getenv("INIT_SCRIPT")
@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
     # MCP配置
+    server_name: str = "sqlite-mcp-server"
+    server_version: str = "1.0.0"
     mcp_server_name: str = "sqlite-mcp-server"
     mcp_server_version: str = "1.0.0"
     

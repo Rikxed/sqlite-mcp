@@ -3,20 +3,24 @@ version: '3.8'
 services:
   sqlite-mcp-server:
     build: .
+    container_name: sqlite-mcp-server
     volumes:
       - ./data:/app/data
       - ./config:/app/config
+      - ./database:/app/database
+      - ./mcp:/app/mcp
       - ./init:/app/init
       - ./scripts:/app/scripts
+      - ./main_standard.py:/app/main_standard.py
+      - ./main_enhanced.py:/app/main_enhanced.py
+      - ./main_natural_language.py:/app/main_natural_language.py
+      - ./main.py:/app/main.py
     environment:
-      - DATABASE_PATH=/app/data/sqlite.db
+      - PYTHONPATH=/app
+      - DATABASE_PATH=/app/data/restaurants.db
       - LOG_LEVEL=INFO
-      - INIT_SCRIPT=/app/init/init.sql
-      # 时段库存初始化配置
-      - INIT_DAYS=7
-      - RESTAURANT_OPEN_TIME=09:00
-      - RESTAURANT_CLOSE_TIME=21:00
-      - SLOT_HOURS=2
+    working_dir: /app
+    command: python main_standard.py
     stdin_open: true
     tty: true
     restart: unless-stopped
