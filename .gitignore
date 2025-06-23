@@ -52,4 +52,4 @@ data/
 Thumbs.db
 
 # Docker
-.dockerignore 
+.dockerignore test_mcp_client.py
