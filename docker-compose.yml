@@ -20,7 +20,7 @@ services:
       - DATABASE_PATH=/app/data/restaurants.db
       - LOG_LEVEL=INFO
     working_dir: /app
-    command: python main_standard.py
+    command: python main_enhanced.py
     stdin_open: true
     tty: true
     restart: unless-stopped
