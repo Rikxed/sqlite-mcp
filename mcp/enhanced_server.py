@@ -10,6 +10,7 @@ import time
 from typing import Any, Dict, List, Optional
 from database.connection import db_manager, thread_safe_db_manager
 from config.settings import settings
+from mcp.natural_language_tools import natural_language_query
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,25 @@ class EnhancedMCPServer:
                         }
                     },
                     "required": ["operations"]
+                }
+            },
+            {
+                "name": "natural_language_query",
+                "description": "使用自然语言进行数据库操作，支持中文和英文。可以创建表、插入数据、查询数据、更新数据、删除数据等。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string", 
+                            "description": "自然语言查询，例如：'创建表 用户 包含 姓名:文本,年龄:数字,邮箱:文本' 或 '插入 姓名=张三,年龄=25 到 用户'"
+                        },
+                        "agent_id": {
+                            "type": "string", 
+                            "description": "代理ID，用于并发控制",
+                            "default": "nl_agent"
+                        }
+                    },
+                    "required": ["query"]
                 }
             },
             {
@@ -227,6 +247,8 @@ class EnhancedMCPServer:
                 result = await self._execute_update(arguments)
             elif tool_name == "sql_transaction":
                 result = await self._execute_transaction(arguments)
+            elif tool_name == "natural_language_query":
+                result = await self._execute_natural_language_query(arguments)
             elif tool_name == "list_tables":
                 result = await self._list_tables(arguments)
             elif tool_name == "describe_table":
@@ -410,6 +432,45 @@ class EnhancedMCPServer:
             }
         
         return f"Agent状态:\n{json.dumps(status, ensure_ascii=False, indent=2)}"
+    
+    async def _execute_natural_language_query(self, arguments: Dict[str, Any]) -> str:
+        """执行自然语言查询"""
+        query = arguments.get("query", "")
+        agent_id = arguments.get("agent_id", "nl_agent")
+        
+        if not query:
+            return "错误: 自然语言查询不能为空"
+        
+        try:
+            # 使用自然语言处理器
+            result = natural_language_query(query, self.db_manager, agent_id)
+            
+            if result.get('success'):
+                operation = result.get('operation', 'unknown')
+                message = result.get('message', '操作成功')
+                sql = result.get('sql', '')
+                db_result = result.get('result', {})
+                
+                response = f"✅ {message}\n"
+                if sql:
+                    response += f"📝 生成的SQL: {sql}\n"
+                if db_result:
+                    response += f"📊 数据库结果: {json.dumps(db_result, ensure_ascii=False, indent=2)}"
+                
+                return response
+            else:
+                error = result.get('error', '未知错误')
+                suggestion = result.get('suggestion', '')
+                
+                response = f"❌ 操作失败: {error}\n"
+                if suggestion:
+                    response += f"💡 建议: {suggestion}"
+                
+                return response
+                
+        except Exception as e:
+            logger.error(f"执行自然语言查询时出错: {e}")
+            return f"❌ 执行自然语言查询时出错: {str(e)}"
     
     async def _transaction_history(self, arguments: Dict[str, Any]) -> str:
         """获取事务历史"""
