@@ -1,5 +1,6 @@
 """
 增强版MCP服务器 - 支持多Agent并发控制
+符合标准MCP协议 (2024-11-05)
 """
 import asyncio
 import json
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedMCPServer:
-    """增强版MCP服务器 - 支持多Agent并发控制"""
+    """增强版MCP服务器 - 支持多Agent并发控制，符合标准MCP协议"""
     
     def __init__(self, agent_id: Optional[str] = None, use_thread_safe: bool = False):
         """
@@ -29,7 +30,18 @@ class EnhancedMCPServer:
         self.agent_id = agent_id or str(uuid.uuid4())
         self.use_thread_safe = use_thread_safe
         self.db_manager = thread_safe_db_manager if use_thread_safe else db_manager
+        
+        # 标准MCP协议属性
+        self.server_name = "sqlite-mcp-server"
+        self.server_version = "1.0.0"
+        self.protocol_version = "2024-11-05"
+        self.initialized = False
+        
+        # 定义工具、通知和资源
         self.tools = self._define_tools()
+        self.notifications = self._define_notifications()
+        self.resources = self._define_resources()
+        
         logger.info(f"增强版MCP服务器初始化完成 - Agent ID: {self.agent_id}")
     
     def _define_tools(self) -> List[Dict[str, Any]]:
@@ -203,15 +215,81 @@ class EnhancedMCPServer:
             }
         ]
     
+    def _define_notifications(self) -> List[Dict[str, Any]]:
+        """定义通知"""
+        return [
+            {
+                "name": "database_changed",
+                "description": "数据库发生变化时的通知"
+            },
+            {
+                "name": "transaction_committed",
+                "description": "事务提交成功的通知"
+            },
+            {
+                "name": "agent_connected",
+                "description": "Agent连接成功的通知"
+            },
+            {
+                "name": "natural_language_query_executed",
+                "description": "自然语言查询执行完成的通知"
+            }
+        ]
+    
+    def _define_resources(self) -> List[Dict[str, Any]]:
+        """定义资源"""
+        return [
+            {
+                "uri": "sqlite:///restaurants",
+                "name": "restaurants",
+                "description": "餐厅信息",
+                "mimeType": "application/json"
+            },
+            {
+                "uri": "sqlite:///time_slots",
+                "name": "time_slots",
+                "description": "时段库存信息",
+                "mimeType": "application/json"
+            },
+            {
+                "uri": "sqlite:///table_types",
+                "name": "table_types",
+                "description": "桌型信息",
+                "mimeType": "application/json"
+            },
+            {
+                "uri": "sqlite:///database_schema",
+                "name": "database_schema",
+                "description": "数据库结构信息",
+                "mimeType": "application/json"
+            }
+        ]
+    
     async def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """处理MCP请求"""
         try:
             method = request.get("method")
             
-            if method == "tools/list":
+            # 检查初始化状态
+            if method != "initialize" and not self.initialized:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "error": {"code": -32002, "message": "Server not initialized"}
+                }
+            
+            if method == "initialize":
+                return await self._initialize(request)
+            elif method == "tools/list":
                 return await self._list_tools(request)
             elif method == "tools/call":
                 return await self._call_tool(request)
+            elif method == "notifications/list":
+                return await self._list_notifications(request)
+            elif method == "resources/list":
+                return await self._list_resources(request)
+            elif method == "resources/read":
+                return await self._read_resource(request)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -226,6 +304,32 @@ class EnhancedMCPServer:
                 "error": {"code": -32603, "message": f"Internal error: {str(e)}"}
             }
     
+    async def _initialize(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """初始化连接"""
+        params = request.get("params", {})
+        client_info = params.get("clientInfo", {})
+        
+        logger.info(f"客户端初始化: {client_info.get('name', 'unknown')} v{client_info.get('version', 'unknown')}")
+        
+        self.initialized = True
+        
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "result": {
+                "protocolVersion": self.protocol_version,
+                "capabilities": {
+                    "tools": {},
+                    "notifications": {},
+                    "resources": {}
+                },
+                "serverInfo": {
+                    "name": self.server_name,
+                    "version": self.server_version
+                }
+            }
+        }
+    
     async def _list_tools(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """列出工具"""
         return {
@@ -233,6 +337,57 @@ class EnhancedMCPServer:
             "id": request.get("id"),
             "result": {"tools": self.tools}
         }
+    
+    async def _list_notifications(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """列出通知"""
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "result": {"notifications": self.notifications}
+        }
+    
+    async def _list_resources(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """列出资源"""
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "result": {"resources": self.resources}
+        }
+    
+    async def _read_resource(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """读取资源"""
+        params = request.get("params", {})
+        uri = params.get("uri")
+        
+        try:
+            if uri == "sqlite:///restaurants":
+                content = await self._get_restaurants_data()
+            elif uri == "sqlite:///time_slots":
+                content = await self._get_time_slots_data()
+            elif uri == "sqlite:///table_types":
+                content = await self._get_table_types_data()
+            elif uri == "sqlite:///database_schema":
+                content = await self._get_database_schema_data()
+            else:
+                raise ValueError(f"未知资源: {uri}")
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request.get("id"),
+                "result": {
+                    "contents": [{
+                        "uri": uri,
+                        "mimeType": "application/json",
+                        "text": json.dumps(content, ensure_ascii=False, indent=2)
+                    }]
+                }
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "id": request.get("id"),
+                "error": {"code": -32603, "message": f"读取资源失败: {str(e)}"}
+            }
     
     async def _call_tool(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """调用工具"""
@@ -279,6 +434,7 @@ class EnhancedMCPServer:
                 }
             }
     
+    # 工具实现方法
     async def _execute_query(self, arguments: Dict[str, Any]) -> str:
         """执行查询"""
         query = arguments.get("query", "")
@@ -482,6 +638,57 @@ class EnhancedMCPServer:
             history = []
         
         return f"事务历史 (最近 {len(history)} 条):\n{json.dumps(history, ensure_ascii=False, indent=2)}"
+    
+    # 资源数据方法
+    async def _get_restaurants_data(self) -> List[Dict[str, Any]]:
+        """获取餐厅数据"""
+        query = "SELECT * FROM restaurants ORDER BY id"
+        return self.db_manager.execute_query(query)
+    
+    async def _get_time_slots_data(self) -> List[Dict[str, Any]]:
+        """获取时段库存数据"""
+        query = """
+            SELECT ts.*, r.name as restaurant_name, tt.capacity
+            FROM time_slots ts
+            JOIN restaurants r ON ts.restaurant_id = r.id
+            JOIN table_types tt ON ts.table_type_id = tt.id
+            WHERE ts.slot_start >= datetime('now')
+            ORDER BY ts.slot_start
+            LIMIT 20
+        """
+        return self.db_manager.execute_query(query)
+    
+    async def _get_table_types_data(self) -> List[Dict[str, Any]]:
+        """获取桌型数据"""
+        query = """
+            SELECT tt.*, r.name as restaurant_name
+            FROM table_types tt
+            JOIN restaurants r ON tt.restaurant_id = r.id
+            ORDER BY r.name, tt.capacity
+        """
+        return self.db_manager.execute_query(query)
+    
+    async def _get_database_schema_data(self) -> Dict[str, Any]:
+        """获取数据库结构数据"""
+        tables_query = """
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name NOT LIKE 'sqlite_%'
+            ORDER BY name
+        """
+        tables = self.db_manager.execute_query(tables_query)
+        
+        schema = {}
+        for table in tables:
+            table_name = table['name']
+            schema_query = f"PRAGMA table_info({table_name})"
+            columns = self.db_manager.execute_query(schema_query)
+            schema[table_name] = columns
+        
+        return {
+            "database_path": settings.database_path,
+            "tables": schema,
+            "total_tables": len(tables)
+        }
     
     async def run(self):
         """运行服务器 - 标准stdio模式"""
