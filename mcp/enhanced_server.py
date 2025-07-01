@@ -270,8 +270,8 @@ class EnhancedMCPServer:
         try:
             method = request.get("method")
             
-            # 检查初始化状态
-            if method != "initialize" and not self.initialized:
+            # 检查初始化状态（通知不需要检查）
+            if method not in ["initialize", "notifications/initialized"] and not self.initialized:
                 return {
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
@@ -286,10 +286,15 @@ class EnhancedMCPServer:
                 return await self._call_tool(request)
             elif method == "notifications/list":
                 return await self._list_notifications(request)
+            elif method == "notifications/initialized":
+                await self._handle_initialized_notification(request)
+                return None  # 通知不需要返回响应
             elif method == "resources/list":
                 return await self._list_resources(request)
             elif method == "resources/read":
                 return await self._read_resource(request)
+            elif method == "shutdown":
+                return await self._handle_shutdown(request)
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -352,6 +357,21 @@ class EnhancedMCPServer:
             "jsonrpc": "2.0",
             "id": request.get("id"),
             "result": {"resources": self.resources}
+        }
+    
+    async def _handle_initialized_notification(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """处理初始化完成通知"""
+        logger.info("收到客户端初始化完成通知")
+        # 对于通知，不需要返回响应
+        return None
+    
+    async def _handle_shutdown(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """处理关闭请求"""
+        logger.info("收到客户端关闭请求")
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "result": None
         }
     
     async def _read_resource(self, request: Dict[str, Any]) -> Dict[str, Any]:
@@ -704,9 +724,10 @@ class EnhancedMCPServer:
                 request = json.loads(line.strip())
                 response = await self.handle_request(request)
                 
-                # 输出响应到标准输出
-                print(json.dumps(response, ensure_ascii=False))
-                sys.stdout.flush()
+                # 只有当响应不为None时才输出（通知不需要响应）
+                if response is not None:
+                    print(json.dumps(response, ensure_ascii=False))
+                    sys.stdout.flush()
                 
             except KeyboardInterrupt:
                 logger.info("服务器被用户中断")

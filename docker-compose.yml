@@ -15,12 +15,19 @@ services:
       - ./main_enhanced.py:/app/main_enhanced.py
       - ./main_natural_language.py:/app/main_natural_language.py
       - ./main.py:/app/main.py
+      - ./health_check.py:/app/health_check.py
     environment:
       - PYTHONPATH=/app
       - DATABASE_PATH=/app/data/restaurants.db
       - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
     working_dir: /app
-    command: python main_enhanced.py
     stdin_open: true
     tty: true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "health_check.py"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
