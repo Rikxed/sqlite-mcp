@@ -11,6 +11,7 @@ services:
       - ./mcp:/app/mcp
       - ./init:/app/init
       - ./scripts:/app/scripts
+      - ./init_restaurant_system.sql:/app/init/init_restaurant_system.sql
       - ./main_standard.py:/app/main_standard.py
       - ./main_enhanced.py:/app/main_enhanced.py
       - ./main_natural_language.py:/app/main_natural_language.py
@@ -21,6 +22,11 @@ services:
       - DATABASE_PATH=/app/data/restaurants.db
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+      - INIT_SCRIPT=/app/init/init_restaurant_system.sql
+      - INIT_DAYS=7
+      - RESTAURANT_OPEN_TIME=09:00
+      - RESTAURANT_CLOSE_TIME=21:00
+      - SLOT_HOURS=2
     working_dir: /app
     stdin_open: true
     tty: true
