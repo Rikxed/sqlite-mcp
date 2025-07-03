@@ -37,19 +37,8 @@ ENV INIT_SCRIPT=/app/init/init.sql
 RUN chmod +x /app/health_check.py
 
 # 创建启动脚本
-RUN echo '#!/bin/bash\n\
-echo "🚀 启动MCP服务器..."\n\
-echo "📁 初始化数据库..."\n\
-# 如果数据库文件不存在则初始化表结构和数据\nif [ ! -f "$DATABASE_PATH" ]; then\n\
-    echo "⚡ 正在初始化餐厅数据库表结构和数据..."\n\
-    sqlite3 "$DATABASE_PATH" < /app/init/init_restaurant_system.sql\n\
-    if [ $? -ne 0 ]; then\n        echo "❌ 餐厅数据库初始化失败"\n        exit 1\n    fi\n    echo "✅ 餐厅数据库初始化完成"\nelse\n    echo "数据库文件已存在，跳过初始化"\nfi\n\
-echo "⏰ 初始化时段库存..."\npython scripts/init_time_slots.py\nif [ $? -eq 0 ]; then\n    echo "✅ 时段库存初始化完成"\nelse\n    echo "⚠️  时段库存初始化失败，但继续启动服务器"\nfi\n\
-echo "🌐 启动MCP服务器 (stdio模式)..."\n\
-echo "🔍 等待服务启动完成..."\n\
-sleep 2\n\
-echo "✅ 服务启动完成，开始监听..."\n\
-# 直接运行MCP服务器，不使用exec\npython main_enhanced.py' > /app/start.sh && chmod +x /app/start.sh
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
 # 设置入口点
 ENTRYPOINT ["/app/start.sh"] 
