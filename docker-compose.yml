@@ -32,8 +32,6 @@ services:
       - AGENT_ID=agent-1
       - USE_THREAD_SAFE=true
     working_dir: /app
-    stdin_open: true
-    tty: true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "health_check.py"]

@@ -38,7 +38,8 @@ RUN chmod +x /app/health_check.py
 
 # 创建启动脚本
 COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+COPY start_mcp_client.sh /app/start_mcp_client.sh
+RUN chmod +x /app/start.sh /app/start_mcp_client.sh
 
 # 设置入口点
 ENTRYPOINT ["/app/start.sh"] 
