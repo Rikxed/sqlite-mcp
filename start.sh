@@ -29,5 +29,14 @@ echo "🔍 等待服务启动完成..."
 sleep 2
 echo "✅ 服务启动完成，开始监听..."
 
-# 直接运行MCP服务器，不使用exec
-python main_enhanced.py 
+# 直接运行MCP服务器，保持前台运行
+# 在Docker环境中，MCP服务器将通过docker exec方式连接
+echo "🔄 MCP服务器已准备就绪，等待客户端连接..."
+echo "📋 使用以下命令连接MCP服务器："
+echo "   docker exec -i sqlite-mcp-server python main_enhanced.py"
+
+# 保持容器运行，等待外部连接
+while true; do
+    sleep 30
+    echo "💓 容器运行中... (等待MCP客户端连接)"
+done 

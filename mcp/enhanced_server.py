@@ -336,11 +336,17 @@ class EnhancedMCPServer:
         }
     
     async def _list_tools(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """列出工具"""
+        """列出工具（官方推荐字典风格）"""
+        # 将self.tools（数组）转换为字典，key为name，value为描述（去除name字段）
+        tools_dict = {}
+        for tool in self.tools:
+            tool_copy = tool.copy()
+            name = tool_copy.pop("name")
+            tools_dict[name] = tool_copy
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
-            "result": {"tools": self.tools}
+            "result": {"tools": tools_dict}
         }
     
     async def _list_notifications(self, request: Dict[str, Any]) -> Dict[str, Any]:

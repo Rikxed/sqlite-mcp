@@ -33,13 +33,8 @@ ENV PYTHONUNBUFFERED=1
 ENV DATABASE_PATH=/app/data/restaurants.db
 ENV INIT_SCRIPT=/app/init/init.sql
 
-# 设置健康检查脚本权限
-RUN chmod +x /app/health_check.py
-
-# 创建启动脚本
-COPY start.sh /app/start.sh
-COPY start_mcp_client.sh /app/start_mcp_client.sh
-RUN chmod +x /app/start.sh /app/start_mcp_client.sh
+# 设置脚本权限
+RUN chmod +x /app/health_check.py /app/start.sh /app/start_mcp_client.sh
 
 # 设置入口点
 ENTRYPOINT ["/app/start.sh"] 
