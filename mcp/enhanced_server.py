@@ -330,33 +330,46 @@ class EnhancedMCPServer:
         }
     
     async def _list_tools(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """列出工具（官方推荐字典风格）"""
-        # 将self.tools（数组）转换为字典，key为name，value为描述（去除name字段）
-        tools_dict = {}
-        for tool in self.tools:
-            tool_copy = tool.copy()
-            name = tool_copy.pop("name")
-            tools_dict[name] = tool_copy
+        """列出工具（MCP协议标准数组格式）"""
+        # 直接返回工具数组，符合MCP协议标准
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
-            "result": {"tools": tools_dict}
+            "result": {"tools": self.tools}
         }
     
     async def _list_notifications(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """列出通知"""
+        """列出通知（MCP协议标准格式）"""
+        # 将通知转换为标准格式
+        notifications_list = []
+        for notification in self.notifications:
+            notifications_list.append({
+                "name": notification["name"],
+                "description": notification["description"]
+            })
+        
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
-            "result": {"notifications": self.notifications}
+            "result": {"notifications": notifications_list}
         }
     
     async def _list_resources(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """列出资源"""
+        """列出资源（MCP协议标准格式）"""
+        # 将资源转换为标准格式
+        resources_list = []
+        for resource in self.resources:
+            resources_list.append({
+                "uri": resource["uri"],
+                "name": resource["name"],
+                "description": resource["description"],
+                "mimeType": resource["mimeType"]
+            })
+        
         return {
             "jsonrpc": "2.0",
             "id": request.get("id"),
-            "result": {"resources": self.resources}
+            "result": {"resources": resources_list}
         }
     
     async def _handle_initialized_notification(self, request: Dict[str, Any]) -> Dict[str, Any]:
