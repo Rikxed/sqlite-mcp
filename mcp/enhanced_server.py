@@ -422,7 +422,8 @@ class EnhancedMCPServer:
         arguments = params.get("arguments", {})
         
         try:
-            if tool_name == "sql_query":
+            # 支持 query_database 作为 sql_query 的别名
+            if tool_name in ("sql_query", "query_database"):
                 result = await self._execute_query(arguments)
             elif tool_name == "sql_update":
                 result = await self._execute_update(arguments)

@@ -83,7 +83,11 @@ def generate_time_slots(days=7, open_time="09:00", close_time="21:00", slot_hour
             conn.close()
             return False
         
-        # 生成时段库存
+        # 优化：使用批量插入和事务
+        cursor.execute("BEGIN TRANSACTION")
+        
+        # 准备批量插入的数据
+        batch_data = []
         slots_created = 0
         
         for restaurant_id, restaurant_name in restaurants:
@@ -106,24 +110,28 @@ def generate_time_slots(days=7, open_time="09:00", close_time="21:00", slot_hour
                     
                     # 为每种桌型生成库存
                     for table_type_id, _, capacity, quantity in restaurant_table_types:
-                        cursor.execute(
-                            """
-                            INSERT OR IGNORE INTO time_slots (
-                                restaurant_id, table_type_id, slot_start, slot_end, available, total
-                            ) VALUES (?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                restaurant_id,
-                                table_type_id,
-                                slot_start,
-                                slot_end,
-                                quantity,  # available
-                                quantity   # total
-                            )
-                        )
+                        batch_data.append((
+                            restaurant_id,
+                            table_type_id,
+                            slot_start,
+                            slot_end,
+                            quantity,  # available
+                            quantity   # total
+                        ))
                         slots_created += 1
         
-        conn.commit()
+        # 批量插入所有数据
+        logger.info(f"批量插入 {len(batch_data)} 条时段库存记录...")
+        cursor.executemany(
+            """
+            INSERT OR IGNORE INTO time_slots (
+                restaurant_id, table_type_id, slot_start, slot_end, available, total
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            batch_data
+        )
+        
+        cursor.execute("COMMIT")
         conn.close()
         
         logger.info(f"时段库存初始化完成！共生成 {slots_created} 条记录")
@@ -131,6 +139,10 @@ def generate_time_slots(days=7, open_time="09:00", close_time="21:00", slot_hour
         
     except Exception as e:
         logger.error(f"生成时段库存时出错: {e}")
+        try:
+            cursor.execute("ROLLBACK")
+        except:
+            pass
         return False
 
 

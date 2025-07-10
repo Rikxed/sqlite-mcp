@@ -11,6 +11,7 @@ RUN echo "deb https://mirrors.aliyun.com/debian/ bullseye main non-free contrib"
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     sqlite3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 使用国内PyPI镜像源
