@@ -16,16 +16,6 @@ else
     echo "数据库文件已存在，跳过初始化"
 fi
 
-echo "⏰ 快速初始化时段库存（仅生成3天数据）..."
-# 临时设置环境变量，减少初始化天数
-export INIT_DAYS=3
-python scripts/init_time_slots.py
-if [ $? -eq 0 ]; then
-    echo "✅ 时段库存初始化完成"
-else
-    echo "⚠️  时段库存初始化失败，但继续启动服务器"
-fi
-
 echo "🌐 启动MCP服务器..."
 echo "✅ 服务启动完成，开始监听..."
 

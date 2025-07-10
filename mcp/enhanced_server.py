@@ -246,12 +246,6 @@ class EnhancedMCPServer:
                 "mimeType": "application/json"
             },
             {
-                "uri": "sqlite:///time_slots",
-                "name": "time_slots",
-                "description": "时段库存信息",
-                "mimeType": "application/json"
-            },
-            {
                 "uri": "sqlite:///table_types",
                 "name": "table_types",
                 "description": "桌型信息",
@@ -388,8 +382,6 @@ class EnhancedMCPServer:
         try:
             if uri == "sqlite:///restaurants":
                 content = await self._get_restaurants_data()
-            elif uri == "sqlite:///time_slots":
-                content = await self._get_time_slots_data()
             elif uri == "sqlite:///table_types":
                 content = await self._get_table_types_data()
             elif uri == "sqlite:///database_schema":
@@ -670,19 +662,6 @@ class EnhancedMCPServer:
     async def _get_restaurants_data(self) -> List[Dict[str, Any]]:
         """获取餐厅数据"""
         query = "SELECT * FROM restaurants ORDER BY id"
-        return self.db_manager.execute_query(query)
-    
-    async def _get_time_slots_data(self) -> List[Dict[str, Any]]:
-        """获取时段库存数据"""
-        query = """
-            SELECT ts.*, r.name as restaurant_name, tt.capacity
-            FROM time_slots ts
-            JOIN restaurants r ON ts.restaurant_id = r.id
-            JOIN table_types tt ON ts.table_type_id = tt.id
-            WHERE ts.slot_start >= datetime('now')
-            ORDER BY ts.slot_start
-            LIMIT 20
-        """
         return self.db_manager.execute_query(query)
     
     async def _get_table_types_data(self) -> List[Dict[str, Any]]:

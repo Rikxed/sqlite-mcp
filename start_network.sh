@@ -16,17 +16,7 @@ else
     echo "数据库文件已存在，跳过初始化"
 fi
 
-echo "⏰ 初始化时段库存..."
-python scripts/init_time_slots.py
-if [ $? -eq 0 ]; then
-    echo "✅ 时段库存初始化完成"
-else
-    echo "⚠️  时段库存初始化失败，但继续启动服务器"
-fi
-
 echo "🌐 启动网络版MCP服务器..."
-echo "🔍 等待服务启动完成..."
-sleep 2
 echo "✅ 服务启动完成，开始监听..."
 
 # 启动网络版MCP服务器
