@@ -200,6 +200,30 @@ class EnhancedMCPServer:
                 }
             },
             {
+                "name": "check_database_status",
+                "description": "检查数据库状态，包括表结构、数据量等统计信息。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "initialize_time_slots",
+                "description": "初始化时段库存数据，生成未来7天的可用时段。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "repair_database",
+                "description": "修复数据库，检查并修复数据完整性问题。",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
                 "name": "transaction_history",
                 "description": "获取事务历史记录，用于调试和监控。",
                 "inputSchema": {
@@ -446,6 +470,12 @@ class EnhancedMCPServer:
                 result = await self._database_info(arguments)
             elif tool_name == "agent_status":
                 result = await self._agent_status(arguments)
+            elif tool_name == "check_database_status":
+                result = await self._check_database_status(arguments)
+            elif tool_name == "initialize_time_slots":
+                result = await self._initialize_time_slots(arguments)
+            elif tool_name == "repair_database":
+                result = await self._repair_database(arguments)
             elif tool_name == "transaction_history":
                 result = await self._transaction_history(arguments)
             else:
@@ -670,6 +700,134 @@ class EnhancedMCPServer:
             history = []
         
         return f"事务历史 (最近 {len(history)} 条):\n{json.dumps(history, ensure_ascii=False, indent=2)}"
+    
+    async def _check_database_status(self, arguments: Dict[str, Any]) -> str:
+        """检查数据库状态"""
+        try:
+            if hasattr(self.db_manager, 'check_database_status'):
+                status = self.db_manager.check_database_status()
+            else:
+                # 回退到基本状态检查
+                status = {
+                    "database_path": settings.database_path,
+                    "agent_id": self.agent_id,
+                    "use_thread_safe": self.use_thread_safe,
+                    "tables": {},
+                    "data_counts": {}
+                }
+                
+                # 检查表
+                tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                tables = self.db_manager.execute_query(tables_query)
+                
+                for table in tables:
+                    table_name = table['name']
+                    status["tables"][table_name] = "exists"
+                    
+                    # 检查数据量
+                    count_query = f"SELECT COUNT(*) as count FROM {table_name}"
+                    count_result = self.db_manager.execute_query(count_query)
+                    status["data_counts"][table_name] = count_result[0]['count']
+            
+            return f"数据库状态:\n{json.dumps(status, ensure_ascii=False, indent=2)}"
+            
+        except Exception as e:
+            logger.error(f"数据库状态检查失败: {e}")
+            return f"❌ 数据库状态检查失败: {str(e)}"
+    
+    async def _initialize_time_slots(self, arguments: Dict[str, Any]) -> str:
+        """初始化时段库存数据"""
+        try:
+            if hasattr(self.db_manager, 'initialize_time_slots'):
+                success = self.db_manager.initialize_time_slots()
+                if success:
+                    return "✅ 时段库存初始化成功"
+                else:
+                    return "❌ 时段库存初始化失败"
+            else:
+                # 回退到手动初始化
+                logger.info("使用手动方式初始化时段库存")
+                
+                # 检查基础数据
+                restaurant_count = self.db_manager.execute_query("SELECT COUNT(*) as count FROM restaurants")[0]['count']
+                table_type_count = self.db_manager.execute_query("SELECT COUNT(*) as count FROM table_types")[0]['count']
+                
+                if restaurant_count == 0 or table_type_count == 0:
+                    return "❌ 基础数据缺失，无法初始化时段库存"
+                
+                # 使用事务初始化时段库存
+                operations = [
+                    ("DELETE FROM time_slots WHERE slot_start >= datetime('now', 'start of day')", ()),
+                    ("""
+                    INSERT INTO time_slots (restaurant_id, table_type_id, slot_start, slot_end, available, total)
+                    SELECT 
+                        r.id,
+                        tt.id,
+                        datetime('now', '+' || (days.day) || ' days', 'start of day', '+12 hours') as slot_start,
+                        datetime('now', '+' || (days.day) || ' days', 'start of day', '+14 hours') as slot_end,
+                        tt.quantity as available,
+                        tt.quantity as total
+                    FROM restaurants r
+                    JOIN table_types tt ON r.id = tt.restaurant_id
+                    CROSS JOIN (
+                        SELECT 0 as day UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 
+                        UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
+                    ) days
+                    WHERE r.name IN ('广式早茶', '川菜馆', '日料店', '西餐厅')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM time_slots ts 
+                        WHERE ts.restaurant_id = r.id 
+                        AND ts.table_type_id = tt.id 
+                        AND ts.slot_start = datetime('now', '+' || (days.day) || ' days', 'start of day', '+12 hours')
+                    )
+                    """, ())
+                ]
+                
+                success = self.db_manager.execute_transaction(operations)
+                
+                if success:
+                    time_slots_count = self.db_manager.execute_query("SELECT COUNT(*) as count FROM time_slots")[0]['count']
+                    return f"✅ 时段库存初始化成功，共生成 {time_slots_count} 条记录"
+                else:
+                    return "❌ 时段库存初始化失败"
+                
+        except Exception as e:
+            logger.error(f"时段库存初始化失败: {e}")
+            return f"❌ 时段库存初始化失败: {str(e)}"
+    
+    async def _repair_database(self, arguments: Dict[str, Any]) -> str:
+        """修复数据库"""
+        try:
+            logger.info("开始修复数据库...")
+            
+            # 检查数据库状态
+            status = await self._check_database_status({})
+            
+            # 检查外键约束
+            fk_check = self.db_manager.execute_query("PRAGMA foreign_key_check")
+            if fk_check:
+                logger.warning(f"发现外键约束问题: {fk_check}")
+            
+            # 尝试运行餐厅系统初始化脚本
+            restaurant_init_path = Path("init/init_restaurant_system.sql")
+            if restaurant_init_path.exists():
+                with open(restaurant_init_path, 'r', encoding='utf-8') as f:
+                    init_sql = f.read()
+                
+                statements = [stmt.strip() for stmt in init_sql.split(';') if stmt.strip()]
+                for stmt in statements:
+                    if stmt:
+                        self.db_manager.execute_update(stmt)
+                
+                logger.info("餐厅系统数据修复完成")
+                return "✅ 数据库修复完成"
+            else:
+                logger.error("餐厅系统初始化脚本不存在")
+                return "❌ 数据库修复失败：初始化脚本不存在"
+                
+        except Exception as e:
+            logger.error(f"数据库修复失败: {e}")
+            return f"❌ 数据库修复失败: {str(e)}"
     
     # 资源数据方法
     async def _get_restaurants_data(self) -> List[Dict[str, Any]]:

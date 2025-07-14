@@ -35,6 +35,7 @@ class ThreadSafeDatabaseManager:
         self._init_database()
         self._run_init_script()
         self._init_connection_pool()
+        self._check_data_integrity()
     
     def _ensure_data_directory(self) -> None:
         """确保数据目录存在"""
@@ -123,6 +124,142 @@ class ThreadSafeDatabaseManager:
         except Exception as e:
             logger.error(f"初始化脚本执行失败: {e}")
             raise
+    
+    def _check_data_integrity(self) -> None:
+        """检查数据完整性"""
+        try:
+            # 检查必要的表是否存在
+            tables_query = """
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name IN ('restaurants', 'table_types', 'time_slots', 'reservations')
+            """
+            tables = self.execute_query(tables_query)
+            table_names = [row['name'] for row in tables]
+            
+            if len(table_names) < 4:
+                logger.warning(f"缺少必要的表: {table_names}")
+                self._repair_database()
+                return
+            
+            # 检查基础数据
+            restaurant_count = self.execute_query("SELECT COUNT(*) as count FROM restaurants")[0]['count']
+            table_type_count = self.execute_query("SELECT COUNT(*) as count FROM table_types")[0]['count']
+            
+            if restaurant_count == 0 or table_type_count == 0:
+                logger.warning("基础数据缺失，尝试修复")
+                self._repair_database()
+                
+        except Exception as e:
+            logger.error(f"数据完整性检查失败: {e}")
+            self._repair_database()
+    
+    def _repair_database(self) -> None:
+        """修复数据库"""
+        try:
+            logger.info("开始修复数据库...")
+            
+            # 尝试运行餐厅系统初始化脚本
+            restaurant_init_path = Path("init/init_restaurant_system.sql")
+            if restaurant_init_path.exists():
+                with open(restaurant_init_path, 'r', encoding='utf-8') as f:
+                    init_sql = f.read()
+                
+                statements = [stmt.strip() for stmt in init_sql.split(';') if stmt.strip()]
+                for stmt in statements:
+                    if stmt:
+                        self.execute_update(stmt)
+                
+                logger.info("餐厅系统数据修复完成")
+            else:
+                logger.error("餐厅系统初始化脚本不存在")
+                
+        except Exception as e:
+            logger.error(f"数据库修复失败: {e}")
+    
+    def check_database_status(self) -> dict:
+        """检查数据库状态"""
+        try:
+            status = {
+                "database_path": self.db_path,
+                "connection_pool_size": self._connection_pool.qsize(),
+                "max_connections": self.max_connections,
+                "tables": {},
+                "data_counts": {}
+            }
+            
+            # 检查表
+            tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            tables = self.execute_query(tables_query)
+            
+            for table in tables:
+                table_name = table['name']
+                status["tables"][table_name] = "exists"
+                
+                # 检查数据量
+                count_query = f"SELECT COUNT(*) as count FROM {table_name}"
+                count_result = self.execute_query(count_query)
+                status["data_counts"][table_name] = count_result[0]['count']
+            
+            return status
+            
+        except Exception as e:
+            logger.error(f"数据库状态检查失败: {e}")
+            return {"error": str(e)}
+    
+    def initialize_time_slots(self) -> bool:
+        """初始化时段库存数据"""
+        try:
+            logger.info("开始初始化时段库存数据...")
+            
+            # 检查基础数据
+            restaurant_count = self.execute_query("SELECT COUNT(*) as count FROM restaurants")[0]['count']
+            table_type_count = self.execute_query("SELECT COUNT(*) as count FROM table_types")[0]['count']
+            
+            if restaurant_count == 0 or table_type_count == 0:
+                logger.error("基础数据缺失，无法初始化时段库存")
+                return False
+            
+            # 使用事务初始化时段库存
+            operations = [
+                ("DELETE FROM time_slots WHERE slot_start >= datetime('now', 'start of day')", ()),
+                ("""
+                INSERT INTO time_slots (restaurant_id, table_type_id, slot_start, slot_end, available, total)
+                SELECT 
+                    r.id,
+                    tt.id,
+                    datetime('now', '+' || (days.day) || ' days', 'start of day', '+12 hours') as slot_start,
+                    datetime('now', '+' || (days.day) || ' days', 'start of day', '+14 hours') as slot_end,
+                    tt.quantity as available,
+                    tt.quantity as total
+                FROM restaurants r
+                JOIN table_types tt ON r.id = tt.restaurant_id
+                CROSS JOIN (
+                    SELECT 0 as day UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 
+                    UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
+                ) days
+                WHERE r.name IN ('广式早茶', '川菜馆', '日料店', '西餐厅')
+                AND NOT EXISTS (
+                    SELECT 1 FROM time_slots ts 
+                    WHERE ts.restaurant_id = r.id 
+                    AND ts.table_type_id = tt.id 
+                    AND ts.slot_start = datetime('now', '+' || (days.day) || ' days', 'start of day', '+12 hours')
+                )
+                """, ())
+            ]
+            
+            success = self.execute_transaction(operations)
+            
+            if success:
+                time_slots_count = self.execute_query("SELECT COUNT(*) as count FROM time_slots")[0]['count']
+                logger.info(f"时段库存初始化完成，共生成 {time_slots_count} 条记录")
+                return True
+            else:
+                logger.error("时段库存初始化失败")
+                return False
+                
+        except Exception as e:
+            logger.error(f"时段库存初始化失败: {e}")
+            return False
     
     @contextmanager
     def get_connection(self) -> Generator[sqlite3.Connection, None, None]:
